@@ -163,7 +163,7 @@ textarea { resize: vertical; min-height: 64px; }
     <header>
       <div>
         <h1>Manage meals</h1>
-        <p class="sub">Changes save on this device and show on the wheel right away.</p>
+        <p class="sub">Changes are shared with everyone who uses this wheel.</p>
       </div>
       <a class="iconbtn" href="#">← Wheel</a>
     </header>
@@ -205,7 +205,21 @@ textarea { resize: vertical; min-height: 64px; }
 </div>
 <div class="toast" id="toast" hidden></div>
 
-<script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
+import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDIHSO7oQU1QUaoYx1e2LBBj1XebM-vaMA",
+  authDomain: "dinner-wheel-265db.firebaseapp.com",
+  projectId: "dinner-wheel-265db",
+  storageBucket: "dinner-wheel-265db.firebasestorage.app",
+  messagingSenderId: "814639522211",
+  appId: "1:814639522211:web:99afb7c7eff0aa58bdba16"
+};
+// The whole list (categories + meals) lives in one shared document
+const sharedRef = doc(getFirestore(initializeApp(firebaseConfig)), "meals", "main");
+
 const SEED_CATS = [{ id: "dinner", name: "Dinners", on: true }, { id: "light", name: "Light & eggy", on: true }];
 const SEED_MEALS = [
   ["Chicken & zucchini meatballs","Ground chicken, grated zucchini, egg and breadcrumbs. Serve with broccoli and roasted potatoes, or over pasta.","dinner"],
@@ -242,15 +256,21 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 };
+const valid = d => d && Array.isArray(d.cats) && Array.isArray(d.meals) && d.cats.length;
 let data = store.get("dw-data-v2", null);
-if (!data || !Array.isArray(data.cats) || !Array.isArray(data.meals) || !data.cats.length) {
+if (!valid(data)) {
   data = seed();
   // carry over choices from the first version of the wheel
   const oldOff = store.get("dw-off", []), oldCats = store.get("dw-cats", null);
   data.meals.forEach((m, i) => { if (oldOff.includes(i)) m.on = false; });
   if (oldCats) data.cats.forEach(c => { if (oldCats[c.id] === false) c.on = false; });
 }
-const save = () => store.set("dw-data-v2", data);
+let synced = false;
+const save = () => {
+  store.set("dw-data-v2", data);
+  if (!synced) { toast("Still connecting — try again in a moment"); return; }
+  setDoc(sharedRef, data).catch(() => toast("Couldn’t save to the shared list"));
+};
 const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const catById = id => data.cats.find(c => c.id === id);
 const esc = s => s.replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
@@ -509,7 +529,20 @@ window.addEventListener("hashchange", route);
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
 new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
-save(); refresh(); route();
+store.set("dw-data-v2", data); refresh(); route();
+
+// Keep in step with the shared list; the first load seeds it from this device's list
+onSnapshot(sharedRef, snap => {
+  if (!snap.exists()) { synced = true; setDoc(sharedRef, data).catch(() => toast("Couldn’t save to the shared list")); return; }
+  synced = true;
+  if (snap.metadata.hasPendingWrites) return; // our own change, already on screen
+  const remote = snap.data();
+  if (!valid(remote)) return;
+  data = remote; store.set("dw-data-v2", data);
+  lastPick = lastPick && data.meals.find(m => m.id === lastPick.id) || null;
+  editing = null; confirmMeal = null; confirmCat = null;
+  refresh();
+}, () => toast("Can’t reach the shared list — showing the copy on this device"));
 document.fonts && document.fonts.ready.then(draw);
 </script>
 </body>
