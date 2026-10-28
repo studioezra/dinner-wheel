@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Dinner Spin Wheel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=Figtree:wght@400;500;600&display=swap">
+<style>
+/* Layout: one centered column; two views — wheel (default) and #manage */
+:root {
+  --bg: #f3f5ef;
+  --surface: #ffffff;
+  --fg: #1f2a22;
+  --muted: #5c6b60;
+  --line: #d9dfd5;
+  --accent: #2f6b4f;
+  --accent-fg: #ffffff;
+  --danger: #b3412c;
+  --danger-bg: #fbe9e4;
+  --pointer: #1f2a22;
+  --s1: #e9b44c; --s2: #9bc59d; --s3: #e07a5f; --s4: #81b29a; --s5: #f2cc8f; --s6: #6d9dc5;
+  --slice-text: #1f2a22;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "Figtree", "Segoe UI", system-ui, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #151b17; --surface: #1e2620; --fg: #e8ede6; --muted: #9aa89d; --line: #33403a;
+  --accent: #7cc49d; --accent-fg: #10241a; --danger: #ef8a72; --danger-bg: #3a221c; --pointer: #e8ede6;
+  --s1: #c9973a; --s2: #7aa57c; --s3: #c56750; --s4: #659a80; --s5: #cfae74; --s6: #5683ab;
+  --slice-text: #10160f; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #151b17; --surface: #1e2620; --fg: #e8ede6; --muted: #9aa89d; --line: #33403a;
+  --accent: #7cc49d; --accent-fg: #10241a; --danger: #ef8a72; --danger-bg: #3a221c; --pointer: #e8ede6;
+  --s1: #c9973a; --s2: #7aa57c; --s3: #c56750; --s4: #659a80; --s5: #cfae74; --s6: #5683ab;
+  --slice-text: #10160f; color-scheme: dark; }
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 16px; line-height: 1.5; }
+.wrap {
+  max-width: 560px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-top: calc(24px + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(48px + env(safe-area-inset-bottom, 0px));
+  display: flex; flex-direction: column; gap: 20px;
+}
+.view { display: flex; flex-direction: column; gap: 20px; }
+header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+header > div { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(2rem, 7vw, 2.6rem); line-height: 1.05; margin: 0; letter-spacing: -0.02em; text-wrap: balance; }
+.sub { color: var(--muted); margin: 0; font-size: 0.95rem; }
+h2.sec { font-family: var(--display); font-weight: 800; font-size: 1.25rem; margin: 0; }
+
+button, input, select, textarea { font: inherit; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  font-weight: 600; font-size: 0.9rem; padding: 8px 14px; border-radius: 999px;
+  border: 1.5px solid var(--line); background: var(--surface); color: var(--muted); cursor: pointer;
+}
+.chip[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+
+.stage { position: relative; width: 100%; max-width: 440px; margin: 0 auto; aspect-ratio: 1; }
+canvas { width: 100%; height: 100%; display: block; }
+.pointer {
+  position: absolute; top: -6px; left: 50%; transform: translateX(-50%);
+  width: 0; height: 0; border-left: 14px solid transparent; border-right: 14px solid transparent;
+  border-top: 26px solid var(--pointer); filter: drop-shadow(0 2px 2px rgba(0,0,0,.25)); z-index: 2;
+}
+.hub {
+  position: absolute; inset: 50% auto auto 50%; transform: translate(-50%, -50%);
+  width: 26%; aspect-ratio: 1; max-width: 100%; border-radius: 50%; border: 0; cursor: pointer;
+  background: var(--accent); color: var(--accent-fg);
+  font: 800 clamp(1rem, 4.5vw, 1.35rem) var(--display); letter-spacing: 0.02em;
+  box-shadow: 0 0 0 6px var(--bg), 0 6px 18px rgba(0,0,0,.2);
+}
+.hub:disabled { cursor: default; opacity: .9; }
+.hub:focus-visible { outline: 3px solid var(--fg); outline-offset: 8px; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; display: flex; flex-direction: column; gap: 8px; }
+.result { min-height: 120px; gap: 6px; }
+.eyebrow { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); font-weight: 600; margin: 0; }
+.result h2 { font-family: var(--display); font-weight: 800; font-size: 1.6rem; line-height: 1.15; margin: 0; text-wrap: balance; }
+.result p.detail { margin: 0; color: var(--muted); }
+.tag { align-self: flex-start; font-size: 0.75rem; font-weight: 600; padding: 2px 10px; border-radius: 999px; background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
+.actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+.btn { font-weight: 600; font-size: 0.95rem; padding: 10px 18px; border-radius: 10px; border: 0; background: var(--accent); color: var(--accent-fg); cursor: pointer; }
+.btn.ghost { background: transparent; color: var(--fg); border: 1.5px solid var(--line); }
+.btn.danger { background: var(--danger-bg); color: var(--danger); }
+.btn.small { padding: 6px 12px; font-size: 0.85rem; border-radius: 8px; }
+.iconbtn { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--surface); color: var(--fg); font-weight: 600; font-size: 0.9rem; text-decoration: none; cursor: pointer; }
+.iconbtn svg { width: 18px; height: 18px; }
+
+/* Manage view */
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.field label { font-size: 0.8rem; font-weight: 600; color: var(--muted); }
+input[type=text], select, textarea {
+  width: 100%; padding: 10px 12px; border-radius: 10px;
+  border: 1.5px solid var(--line); background: var(--bg); color: var(--fg);
+}
+textarea { resize: vertical; min-height: 64px; }
+.row { display: flex; gap: 8px; align-items: center; }
+.row > .grow { flex: 1; min-width: 0; }
+.list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; }
+.list > li { border-top: 1px solid var(--line); padding-block: 10px; display: flex; flex-direction: column; gap: 8px; }
+.list > li:first-child { border-top: 0; }
+.cat-meta { font-size: 0.8rem; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.meal-head { display: flex; gap: 10px; align-items: flex-start; }
+.meal-head input[type=checkbox] { margin-top: 4px; accent-color: var(--accent); width: 18px; height: 18px; flex: none; }
+.meal-text { flex: 1; min-width: 0; }
+.meal-name { font-weight: 600; }
+.meal-name.off { color: var(--muted); text-decoration: line-through; }
+.meal-detail { font-size: 0.85rem; color: var(--muted); }
+.group-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); font-weight: 600; margin: 8px 0 0; }
+.edit { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 12px; background: var(--bg); }
+.edit input[type=text], .edit select, .edit textarea { background: var(--surface); }
+.note { font-size: 0.85rem; color: var(--muted); margin: 0; }
+.err { font-size: 0.85rem; color: var(--danger); margin: 0; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(20px + env(safe-area-inset-bottom, 0px)); background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-weight: 600; font-size: 0.9rem; z-index: 20; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <!-- WHEEL VIEW -->
+  <section class="view" id="v-wheel">
+    <header>
+      <div>
+        <h1>What’s for dinner?</h1>
+        <p class="sub">Tap Spin and let the wheel decide.</p>
+      </div>
+      <a class="iconbtn" href="#manage" aria-label="Manage meals and categories">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+        Manage
+      </a>
+    </header>
+
+    <div class="chips" role="group" aria-label="Which categories to include" id="chips"></div>
+
+    <div class="stage">
+      <div class="pointer" aria-hidden="true"></div>
+      <canvas id="wheel" width="880" height="880" aria-label="Dinner wheel"></canvas>
+      <button class="hub" id="spin">SPIN</button>
+    </div>
+
+    <section class="card result" aria-live="polite">
+      <p class="eyebrow">Tonight</p>
+      <h2 id="r-name">Spin to pick</h2>
+      <p class="detail" id="r-detail"></p>
+      <span class="tag" id="r-tag" hidden></span>
+      <div class="actions" id="r-actions" hidden>
+        <button class="btn" id="again">Spin again</button>
+        <button class="btn ghost" id="skip">Not this week</button>
+      </div>
+    </section>
+  </section>
+
+  <!-- MANAGE VIEW -->
+  <section class="view" id="v-manage" hidden>
+    <header>
+      <div>
+        <h1>Manage meals</h1>
+        <p class="sub">Changes save on this device and show on the wheel right away.</p>
+      </div>
+      <a class="iconbtn" href="#">← Wheel</a>
+    </header>
+
+    <section class="card">
+      <h2 class="sec">Add a meal</h2>
+      <form id="add-meal" class="edit" style="background:transparent;padding:0">
+        <div class="field"><label for="am-name">Name</label><input type="text" id="am-name" maxlength="80" placeholder="e.g. Veggie stir-fry" required></div>
+        <div class="field"><label for="am-detail">Sides and ingredients (optional)</label><textarea id="am-detail" maxlength="300" placeholder="e.g. With rice and edamame"></textarea></div>
+        <div class="field"><label for="am-cat">Category</label><select id="am-cat"></select></div>
+        <div><button class="btn" type="submit">Add meal</button></div>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2 class="sec">Categories</h2>
+      <p class="note">Rename a category by editing its name. Removing one moves its meals to another category.</p>
+      <ul class="list" id="cat-list"></ul>
+      <form id="add-cat" class="row">
+        <div class="grow"><input type="text" id="ac-name" maxlength="30" placeholder="New category, e.g. Weekend" aria-label="New category name" required></div>
+        <button class="btn" type="submit">Add</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2 class="sec">Meals <span class="cat-meta" id="meal-count"></span></h2>
+      <p class="note">Untick a meal to keep it off the wheel without deleting it.</p>
+      <div id="meal-groups"></div>
+    </section>
+
+    <section class="card">
+      <h2 class="sec">Start over</h2>
+      <p class="note">Bring back your original 24 meals and two categories. This replaces everything above.</p>
+      <div class="actions" style="margin-top:0" id="reset-box">
+        <button class="btn ghost" id="reset">Restore original list</button>
+      </div>
+    </section>
+  </section>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const SEED_CATS = [{ id: "dinner", name: "Dinners", on: true }, { id: "light", name: "Light & eggy", on: true }];
+const SEED_MEALS = [
+  ["Chicken & zucchini meatballs","Ground chicken, grated zucchini, egg and breadcrumbs. Serve with broccoli and roasted potatoes, or over pasta.","dinner"],
+  ["Turkey burgers","With sweet potato fries.","dinner"],
+  ["Chicken & cheese quesadillas","Shredded cheese and finely chopped cooked peppers.","dinner"],
+  ["Beef kofta fingers","Lean beef, onion and parsley. Serve with pita, roasted veggies, hummus and tahini.","dinner"],
+  ["Schnitzel & couscous","Schnitzel with Israeli couscous.","dinner"],
+  ["Chicken shawarma bowls","Rice, cucumber, tomato and hummus.","dinner"],
+  ["Kubah shifta","With rice.","dinner"],
+  ["Salmon","With sweet potato and broccoli.","dinner"],
+  ["Shakshuka","Eggs poached in spiced tomato sauce.","dinner"],
+  ["Turkey taco bowls","Ground turkey, black beans, avocado, corn and shredded cheese.","dinner"],
+  ["Spinach & ricotta pasta bake","Spinach, ricotta, marinara and mozzarella.","dinner"],
+  ["Chicken Marsala","","dinner"],
+  ["Mini turkey meatloaves","","dinner"],
+  ["Schnitzel & corn","","dinner"],
+  ["Teriyaki turkey meatballs","","dinner"],
+  ["Chicken nuggets","","dinner"],
+  ["Pita pizza","","dinner"],
+  ["Lemon garlic baked fish","Tilapia or cod with olive oil, lemon, garlic and paprika. Serve with potato wedges and vegetables.","dinner"],
+  ["Pasta bolognese","","dinner"],
+  ["Spinach & cheese egg muffins","Served with fruit and avocado.","light"],
+  ["Broccoli muffins","","light"],
+  ["Egg quesadillas","","light"],
+  ["Banana muffins","","light"],
+  ["Veggie fritters","Zucchini, carrot and potato with egg, flour and seasoning, baked or pan-cooked. Add Greek yogurt and a protein like chicken or eggs.","light"],
+];
+const seed = () => ({
+  cats: SEED_CATS.map(c => ({ ...c })),
+  meals: SEED_MEALS.map(([name, detail, cat], i) => ({ id: "m" + i, name, detail, cat, on: true })),
+});
+
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+};
+let data = store.get("dw-data-v2", null);
+if (!data || !Array.isArray(data.cats) || !Array.isArray(data.meals) || !data.cats.length) {
+  data = seed();
+  // carry over choices from the first version of the wheel
+  const oldOff = store.get("dw-off", []), oldCats = store.get("dw-cats", null);
+  data.meals.forEach((m, i) => { if (oldOff.includes(i)) m.on = false; });
+  if (oldCats) data.cats.forEach(c => { if (oldCats[c.id] === false) c.on = false; });
+}
+const save = () => store.set("dw-data-v2", data);
+const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const catById = id => data.cats.find(c => c.id === id);
+const esc = s => s.replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+
+let toastT;
+function toast(msg) {
+  const t = document.getElementById("toast"); t.textContent = msg; t.hidden = false;
+  clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 1800);
+}
+
+/* ---------- Wheel ---------- */
+const canvas = document.getElementById("wheel");
+const ctx = canvas.getContext("2d");
+const spinBtn = document.getElementById("spin");
+let rotation = 0, spinning = false, current = [], lastPick = null;
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const short = s => s.length > 22 ? s.slice(0, 21) + "…" : s;
+const active = () => data.meals.filter(m => m.on && catById(m.cat)?.on);
+
+function draw() {
+  current = active();
+  const W = canvas.width, R = W / 2 - 8, c = W / 2;
+  ctx.clearRect(0, 0, W, W);
+  const colors = ["--s1","--s2","--s3","--s4","--s5","--s6"].map(css);
+  const n = current.length;
+  if (!n) {
+    ctx.beginPath(); ctx.arc(c, c, R, 0, Math.PI * 2); ctx.fillStyle = css("--line"); ctx.fill();
+    return;
+  }
+  const arc = Math.PI * 2 / n;
+  ctx.save(); ctx.translate(c, c); ctx.rotate(rotation);
+  current.forEach((m, i) => {
+    const a0 = -Math.PI / 2 + i * arc;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, R, a0, a0 + arc); ctx.closePath();
+    let col = colors[i % 6];
+    if (n > 1 && n % 6 === 1 && i === n - 1) col = colors[2];
+    ctx.fillStyle = col; ctx.fill();
+    ctx.strokeStyle = css("--bg"); ctx.lineWidth = 3; ctx.stroke();
+    ctx.save(); ctx.rotate(a0 + arc / 2);
+    ctx.fillStyle = css("--slice-text");
+    const fs = n > 18 ? 24 : n > 12 ? 28 : 32;
+    ctx.font = `600 ${fs}px Figtree, system-ui, sans-serif`;
+    ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    ctx.fillText(short(m.name), R - 22, 0);
+    ctx.restore();
+  });
+  ctx.restore();
+  ctx.beginPath(); ctx.arc(c, c, R, 0, Math.PI * 2); ctx.strokeStyle = css("--fg"); ctx.lineWidth = 6; ctx.stroke();
+}
+
+function spin() {
+  if (spinning) return;
+  current = active();
+  if (!current.length) { showEmpty(); return; }
+  spinning = true; spinBtn.disabled = true;
+  const n = current.length, arc = Math.PI * 2 / n, TAU = Math.PI * 2;
+  const pick = Math.floor(Math.random() * n);
+  const jitter = (Math.random() - 0.5) * arc * 0.7;
+  const want = (((-(pick * arc + arc / 2) + jitter) % TAU) + TAU) % TAU;
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const turns = reduced ? 1 : 6 + Math.floor(Math.random() * 3);
+  const base = rotation - (((rotation % TAU) + TAU) % TAU);
+  let target = base + turns * TAU + want;
+  if (target <= rotation) target += TAU;
+  const start = rotation, dur = reduced ? 400 : 4200, t0 = performance.now();
+  const ease = t => 1 - Math.pow(1 - t, 4);
+  function frame(now) {
+    const t = Math.min(1, (now - t0) / dur);
+    rotation = start + (target - start) * ease(t);
+    draw();
+    if (t < 1) requestAnimationFrame(frame);
+    else { rotation = rotation % TAU; spinning = false; spinBtn.disabled = false; show(current[pick]); }
+  }
+  requestAnimationFrame(frame);
+}
+
+function setResult(name, detail, tag, actions) {
+  document.getElementById("r-name").textContent = name;
+  const d = document.getElementById("r-detail"); d.textContent = detail; d.hidden = !detail;
+  const t = document.getElementById("r-tag"); t.textContent = tag || ""; t.hidden = !tag;
+  document.getElementById("r-actions").hidden = !actions;
+}
+function show(m) { lastPick = m; setResult(m.name, m.detail, catById(m.cat)?.name, true); }
+function showEmpty() { setResult("The wheel is empty", "Turn on a category above, or tick some meals in Manage.", "", false); }
+function idleResult() {
+  const n = active().length;
+  if (!lastPick) n ? setResult("Spin to pick", `${n} meal${n === 1 ? "" : "s"} on the wheel.`, "", false) : showEmpty();
+}
+
+function renderChips() {
+  const box = document.getElementById("chips"); box.innerHTML = "";
+  data.cats.forEach(c => {
+    const b = document.createElement("button");
+    b.className = "chip"; b.textContent = c.name; b.setAttribute("aria-pressed", c.on);
+    b.addEventListener("click", () => { if (spinning) return; c.on = !c.on; save(); refresh(); });
+    box.appendChild(b);
+  });
+}
+
+spinBtn.addEventListener("click", spin);
+document.getElementById("again").addEventListener("click", spin);
+document.getElementById("skip").addEventListener("click", () => {
+  if (spinning || !lastPick) return;
+  const m = data.meals.find(x => x.id === lastPick.id); if (m) m.on = false;
+  save(); refresh(); toast(`${lastPick.name} is off the wheel`); spin();
+});
+
+/* ---------- Manage ---------- */
+let editing = null, confirmCat = null, confirmMeal = null, confirmReset = false;
+
+function catOptions(sel) {
+  return data.cats.map(c => `<option value="${c.id}" ${c.id === sel ? "selected" : ""}>${esc(c.name)}</option>`).join("");
+}
+
+function renderCats() {
+  const ul = document.getElementById("cat-list"); ul.innerHTML = "";
+  data.cats.forEach(c => {
+    const n = data.meals.filter(m => m.cat === c.id).length;
+    const li = document.createElement("li");
+    const others = data.cats.filter(o => o.id !== c.id);
+    if (confirmCat === c.id) {
+      li.innerHTML = `
+        <p style="margin:0"><strong>Remove “${esc(c.name)}”?</strong></p>
+        ${n ? `<div class="field"><label for="mv-${c.id}">Move its ${n} meal${n === 1 ? "" : "s"} to</label><select id="mv-${c.id}">${others.map(o => `<option value="${o.id}">${esc(o.name)}</option>`).join("")}</select></div>` : ""}
+        <div class="actions" style="margin-top:0"><button class="btn danger small" data-act="yes">Remove category</button><button class="btn ghost small" data-act="no">Cancel</button></div>`;
+      li.querySelector('[data-act="yes"]').onclick = () => {
+        const dest = n ? li.querySelector("select").value : null;
+        if (dest) data.meals.forEach(m => { if (m.cat === c.id) m.cat = dest; });
+        data.cats = data.cats.filter(x => x.id !== c.id);
+        confirmCat = null; save(); refresh(); toast("Category removed");
+      };
+      li.querySelector('[data-act="no"]').onclick = () => { confirmCat = null; renderCats(); };
+    } else {
+      li.innerHTML = `
+        <div class="row">
+          <div class="grow"><input type="text" id="cn-${c.id}" maxlength="30" aria-label="Category name"></div>
+          <span class="cat-meta">${n} meal${n === 1 ? "" : "s"}</span>
+          <button class="btn ghost small" data-act="del" ${data.cats.length < 2 ? "disabled title='Keep at least one category'" : ""}>Remove</button>
+        </div>`;
+      const inp = li.querySelector("input"); inp.value = c.name;
+      inp.addEventListener("change", () => {
+        const v = inp.value.trim();
+        if (!v) { inp.value = c.name; return; }
+        c.name = v; save(); renderChips(); renderMeals(); renderAddCat(); toast("Category renamed");
+      });
+      li.querySelector('[data-act="del"]').onclick = () => { if (data.cats.length < 2) return; confirmCat = c.id; renderCats(); };
+    }
+    ul.appendChild(li);
+  });
+}
+
+function renderAddCat() {
+  const sel = document.getElementById("am-cat"), cur = sel.value;
+  sel.innerHTML = catOptions(catById(cur) ? cur : data.cats[0]?.id);
+}
+
+function renderMeals() {
+  const box = document.getElementById("meal-groups"); box.innerHTML = "";
+  document.getElementById("meal-count").textContent = `${active().length} of ${data.meals.length} on the wheel`;
+  data.cats.forEach(c => {
+    const meals = data.meals.filter(m => m.cat === c.id);
+    const h = document.createElement("p"); h.className = "group-title"; h.textContent = `${c.name} · ${meals.length}`;
+    box.appendChild(h);
+    const ul = document.createElement("ul"); ul.className = "list";
+    if (!meals.length) {
+      const li = document.createElement("li"); li.innerHTML = `<p class="note">No meals here yet.</p>`; ul.appendChild(li);
+    }
+    meals.forEach(m => {
+      const li = document.createElement("li");
+      if (editing === m.id) {
+        li.innerHTML = `
+          <form class="edit">
+            <div class="field"><label for="en-${m.id}">Name</label><input type="text" id="en-${m.id}" maxlength="80" required></div>
+            <div class="field"><label for="ed-${m.id}">Sides and ingredients</label><textarea id="ed-${m.id}" maxlength="300"></textarea></div>
+            <div class="field"><label for="ec-${m.id}">Category</label><select id="ec-${m.id}">${catOptions(m.cat)}</select></div>
+            <div class="actions" style="margin-top:0">
+              <button class="btn small" type="submit">Save</button>
+              <button class="btn ghost small" type="button" data-act="cancel">Cancel</button>
+              <button class="btn danger small" type="button" data-act="del" style="margin-left:auto">${confirmMeal === m.id ? "Tap again to delete" : "Delete"}</button>
+            </div>
+          </form>`;
+        const f = li.querySelector("form");
+        f.querySelector("input").value = m.name;
+        f.querySelector("textarea").value = m.detail;
+        f.addEventListener("submit", e => {
+          e.preventDefault();
+          const name = f.querySelector("input").value.trim(); if (!name) return;
+          m.name = name; m.detail = f.querySelector("textarea").value.trim(); m.cat = f.querySelector("select").value;
+          editing = null; confirmMeal = null; save(); refresh(); toast("Meal saved");
+        });
+        f.querySelector('[data-act="cancel"]').onclick = () => { editing = null; confirmMeal = null; renderMeals(); };
+        f.querySelector('[data-act="del"]').onclick = () => {
+          if (confirmMeal !== m.id) { confirmMeal = m.id; renderMeals(); return; }
+          data.meals = data.meals.filter(x => x.id !== m.id);
+          if (lastPick?.id === m.id) lastPick = null;
+          editing = null; confirmMeal = null; save(); refresh(); toast("Meal deleted");
+        };
+      } else {
+        li.innerHTML = `
+          <div class="meal-head">
+            <input type="checkbox" id="on-${m.id}" ${m.on ? "checked" : ""} aria-label="Include ${esc(m.name)} on the wheel">
+            <div class="meal-text"><div class="meal-name ${m.on ? "" : "off"}"></div>${m.detail ? `<div class="meal-detail"></div>` : ""}</div>
+            <button class="btn ghost small" data-act="edit">Edit</button>
+          </div>`;
+        li.querySelector(".meal-name").textContent = m.name;
+        if (m.detail) li.querySelector(".meal-detail").textContent = m.detail;
+        li.querySelector("input").addEventListener("change", e => { m.on = e.target.checked; save(); refresh(); });
+        li.querySelector('[data-act="edit"]').onclick = () => { editing = m.id; confirmMeal = null; renderMeals(); document.getElementById("en-" + m.id)?.focus(); };
+      }
+      ul.appendChild(li);
+    });
+    box.appendChild(ul);
+  });
+}
+
+document.getElementById("add-meal").addEventListener("submit", e => {
+  e.preventDefault();
+  const name = document.getElementById("am-name").value.trim(); if (!name) return;
+  const detail = document.getElementById("am-detail").value.trim();
+  const cat = document.getElementById("am-cat").value || data.cats[0].id;
+  data.meals.push({ id: uid("m"), name, detail, cat, on: true });
+  e.target.reset(); renderAddCat(); save(); refresh(); toast(`Added ${name}`);
+});
+
+document.getElementById("add-cat").addEventListener("submit", e => {
+  e.preventDefault();
+  const inp = document.getElementById("ac-name"), name = inp.value.trim(); if (!name) return;
+  data.cats.push({ id: uid("c"), name, on: true });
+  inp.value = ""; save(); refresh(); toast(`Added ${name}`);
+});
+
+function renderReset() {
+  const box = document.getElementById("reset-box");
+  box.innerHTML = confirmReset
+    ? `<button class="btn danger" id="reset-yes">Replace my list</button><button class="btn ghost" id="reset-no">Cancel</button>`
+    : `<button class="btn ghost" id="reset">Restore original list</button>`;
+  if (confirmReset) {
+    document.getElementById("reset-yes").onclick = () => { data = seed(); lastPick = null; confirmReset = false; editing = null; save(); refresh(); toast("Original list restored"); };
+    document.getElementById("reset-no").onclick = () => { confirmReset = false; renderReset(); };
+  } else {
+    document.getElementById("reset").onclick = () => { confirmReset = true; renderReset(); };
+  }
+}
+
+/* ---------- Routing & refresh ---------- */
+function refresh() { renderChips(); renderCats(); renderAddCat(); renderMeals(); renderReset(); draw(); idleResult(); }
+function route() {
+  const manage = location.hash === "#manage";
+  if (manage && spinning) return;
+  document.getElementById("v-wheel").hidden = manage;
+  document.getElementById("v-manage").hidden = !manage;
+  window.scrollTo(0, 0);
+  if (!manage) draw();
+}
+window.addEventListener("hashchange", route);
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
+new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+save(); refresh(); route();
+document.fonts && document.fonts.ready.then(draw);
+</script>
+</body>
+</html>
