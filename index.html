@@ -98,7 +98,9 @@ canvas { width: 100%; height: 100%; display: block; }
 /* Manage view */
 .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .field label { font-size: 0.8rem; font-weight: 600; color: var(--muted); }
-input[type=text], select, textarea {
+.toolbar { display: flex; gap: 10px; flex-wrap: wrap; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+input[type=text], input[type=search], select, textarea {
   width: 100%; padding: 10px 12px; border-radius: 10px;
   border: 1.5px solid var(--line); background: var(--bg); color: var(--fg);
 }
@@ -168,17 +170,25 @@ textarea { resize: vertical; min-height: 64px; }
       <a class="iconbtn" href="#">← Wheel</a>
     </header>
 
-    <section class="card">
+    <div class="toolbar">
+      <button class="btn" type="button" id="open-add" aria-expanded="false" aria-controls="p-add">+ Add meal</button>
+      <button class="btn ghost" type="button" id="open-cats" aria-expanded="false" aria-controls="p-cats">Manage categories</button>
+    </div>
+
+    <section class="card" id="p-add" hidden>
       <h2 class="sec">Add a meal</h2>
       <form id="add-meal" class="edit" style="background:transparent;padding:0">
         <div class="field"><label for="am-name">Name</label><input type="text" id="am-name" maxlength="80" placeholder="e.g. Veggie stir-fry" required></div>
         <div class="field"><label for="am-detail">Sides and ingredients (optional)</label><textarea id="am-detail" maxlength="300" placeholder="e.g. With rice and edamame"></textarea></div>
         <div class="field"><label for="am-cat">Category</label><select id="am-cat"></select></div>
-        <div><button class="btn" type="submit">Add meal</button></div>
+        <div class="actions" style="margin-top:0">
+          <button class="btn" type="submit">Add meal</button>
+          <button class="btn ghost" type="button" id="add-cancel">Cancel</button>
+        </div>
       </form>
     </section>
 
-    <section class="card">
+    <section class="card" id="p-cats" hidden>
       <h2 class="sec">Categories</h2>
       <p class="note">Rename a category by editing its name. Removing one moves its meals to another category.</p>
       <ul class="list" id="cat-list"></ul>
@@ -186,20 +196,22 @@ textarea { resize: vertical; min-height: 64px; }
         <div class="grow"><input type="text" id="ac-name" maxlength="30" placeholder="New category, e.g. Weekend" aria-label="New category name" required></div>
         <button class="btn" type="submit">Add</button>
       </form>
+      <h2 class="sec" style="margin-top:12px">Start over</h2>
+      <p class="note">Bring back the original 24 meals and two categories. This replaces everything for everyone.</p>
+      <div class="actions" style="margin-top:0" id="reset-box">
+        <button class="btn ghost" id="reset">Restore original list</button>
+      </div>
     </section>
+
+    <div class="field">
+      <label for="search" class="sr">Search meals</label>
+      <input type="search" id="search" placeholder="Search meals" autocomplete="off">
+    </div>
 
     <section class="card">
       <h2 class="sec">Meals <span class="cat-meta" id="meal-count"></span></h2>
       <p class="note">Untick a meal to keep it off the wheel without deleting it.</p>
       <div id="meal-groups"></div>
-    </section>
-
-    <section class="card">
-      <h2 class="sec">Start over</h2>
-      <p class="note">Bring back your original 24 meals and two categories. This replaces everything above.</p>
-      <div class="actions" style="margin-top:0" id="reset-box">
-        <button class="btn ghost" id="reset">Restore original list</button>
-      </div>
     </section>
   </section>
 </div>
@@ -427,11 +439,32 @@ function renderAddCat() {
   sel.innerHTML = catOptions(catById(cur) ? cur : data.cats[0]?.id);
 }
 
+let panel = null;
+function setPanel(p) {
+  panel = p;
+  [["add", "open-add"], ["cats", "open-cats"]].forEach(([k, b]) => {
+    document.getElementById("p-" + k).hidden = panel !== k;
+    document.getElementById(b).setAttribute("aria-expanded", panel === k);
+  });
+  if (panel === "add") document.getElementById("am-name").focus();
+}
+document.getElementById("open-add").addEventListener("click", () => setPanel(panel === "add" ? null : "add"));
+document.getElementById("open-cats").addEventListener("click", () => setPanel(panel === "cats" ? null : "cats"));
+document.getElementById("add-cancel").addEventListener("click", () => { document.getElementById("add-meal").reset(); setPanel(null); });
+document.getElementById("search").addEventListener("input", renderMeals);
+
 function renderMeals() {
   const box = document.getElementById("meal-groups"); box.innerHTML = "";
   document.getElementById("meal-count").textContent = `${active().length} of ${data.meals.length} on the wheel`;
+  const q = document.getElementById("search").value.trim().toLowerCase();
+  const hit = m => !q || m.name.toLowerCase().includes(q) || m.detail.toLowerCase().includes(q);
+  if (q && !data.meals.some(hit)) {
+    const p = document.createElement("p"); p.className = "note"; p.textContent = "No meals match your search."; box.appendChild(p);
+    return;
+  }
   data.cats.forEach(c => {
-    const meals = data.meals.filter(m => m.cat === c.id);
+    const meals = data.meals.filter(m => m.cat === c.id && hit(m));
+    if (q && !meals.length) return;
     const h = document.createElement("p"); h.className = "group-title"; h.textContent = `${c.name} · ${meals.length}`;
     box.appendChild(h);
     const ul = document.createElement("ul"); ul.className = "list";
@@ -492,7 +525,8 @@ document.getElementById("add-meal").addEventListener("submit", e => {
   const detail = document.getElementById("am-detail").value.trim();
   const cat = document.getElementById("am-cat").value || data.cats[0].id;
   data.meals.push({ id: uid("m"), name, detail, cat, on: true });
-  e.target.reset(); renderAddCat(); save(); refresh(); toast(`Added ${name}`);
+  e.target.reset(); setPanel(null); document.getElementById("search").value = "";
+  renderAddCat(); save(); refresh(); toast(`Added ${name}`);
 });
 
 document.getElementById("add-cat").addEventListener("submit", e => {
