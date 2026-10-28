@@ -99,6 +99,7 @@ canvas { width: 100%; height: 100%; display: block; }
 .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .field label { font-size: 0.8rem; font-weight: 600; color: var(--muted); }
 .toolbar { display: flex; gap: 10px; flex-wrap: wrap; }
+a.btn { display: inline-block; text-decoration: none; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 input[type=text], input[type=search], select, textarea {
   width: 100%; padding: 10px 12px; border-radius: 10px;
@@ -172,7 +173,7 @@ textarea { resize: vertical; min-height: 64px; }
 
     <div class="toolbar">
       <button class="btn" type="button" id="open-add" aria-expanded="false" aria-controls="p-add">+ Add meal</button>
-      <button class="btn ghost" type="button" id="open-cats" aria-expanded="false" aria-controls="p-cats">Manage categories</button>
+      <a class="btn ghost" href="#categories">Manage categories</a>
     </div>
 
     <section class="card" id="p-add" hidden>
@@ -188,21 +189,6 @@ textarea { resize: vertical; min-height: 64px; }
       </form>
     </section>
 
-    <section class="card" id="p-cats" hidden>
-      <h2 class="sec">Categories</h2>
-      <p class="note">Rename a category by editing its name. Removing one moves its meals to another category.</p>
-      <ul class="list" id="cat-list"></ul>
-      <form id="add-cat" class="row">
-        <div class="grow"><input type="text" id="ac-name" maxlength="30" placeholder="New category, e.g. Weekend" aria-label="New category name" required></div>
-        <button class="btn" type="submit">Add</button>
-      </form>
-      <h2 class="sec" style="margin-top:12px">Start over</h2>
-      <p class="note">Bring back the original 24 meals and two categories. This replaces everything for everyone.</p>
-      <div class="actions" style="margin-top:0" id="reset-box">
-        <button class="btn ghost" id="reset">Restore original list</button>
-      </div>
-    </section>
-
     <div class="field">
       <label for="search" class="sr">Search meals</label>
       <input type="search" id="search" placeholder="Search meals" autocomplete="off">
@@ -212,6 +198,34 @@ textarea { resize: vertical; min-height: 64px; }
       <h2 class="sec">Meals <span class="cat-meta" id="meal-count"></span></h2>
       <p class="note">Untick a meal to keep it off the wheel without deleting it.</p>
       <div id="meal-groups"></div>
+    </section>
+  </section>
+
+  <!-- CATEGORIES VIEW -->
+  <section class="view" id="v-cats" hidden>
+    <header>
+      <div>
+        <h1>Categories</h1>
+        <p class="sub">Changes are shared with everyone who uses this wheel.</p>
+      </div>
+      <a class="iconbtn" href="#manage">← Meals</a>
+    </header>
+
+    <section class="card">
+      <p class="note">Rename a category by editing its name. Removing one moves its meals to another category.</p>
+      <ul class="list" id="cat-list"></ul>
+      <form id="add-cat" class="row">
+        <div class="grow"><input type="text" id="ac-name" maxlength="30" placeholder="New category, e.g. Weekend" aria-label="New category name" required></div>
+        <button class="btn" type="submit">Add</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2 class="sec">Start over</h2>
+      <p class="note">Bring back the original 24 meals and two categories. This replaces everything for everyone.</p>
+      <div class="actions" style="margin-top:0" id="reset-box">
+        <button class="btn ghost" id="reset">Restore original list</button>
+      </div>
     </section>
   </section>
 </div>
@@ -439,25 +453,22 @@ function renderAddCat() {
   sel.innerHTML = catOptions(catById(cur) ? cur : data.cats[0]?.id);
 }
 
-let panel = null;
-function setPanel(p) {
-  panel = p;
-  [["add", "open-add"], ["cats", "open-cats"]].forEach(([k, b]) => {
-    document.getElementById("p-" + k).hidden = panel !== k;
-    document.getElementById(b).setAttribute("aria-expanded", panel === k);
-  });
-  if (panel === "add") document.getElementById("am-name").focus();
+let adding = false;
+function setPanel(open) {
+  adding = open;
+  document.getElementById("p-add").hidden = !adding;
+  document.getElementById("open-add").setAttribute("aria-expanded", adding);
+  if (adding) document.getElementById("am-name").focus();
 }
-document.getElementById("open-add").addEventListener("click", () => setPanel(panel === "add" ? null : "add"));
-document.getElementById("open-cats").addEventListener("click", () => setPanel(panel === "cats" ? null : "cats"));
-document.getElementById("add-cancel").addEventListener("click", () => { document.getElementById("add-meal").reset(); setPanel(null); });
+document.getElementById("open-add").addEventListener("click", () => setPanel(!adding));
+document.getElementById("add-cancel").addEventListener("click", () => { document.getElementById("add-meal").reset(); setPanel(false); });
 document.getElementById("search").addEventListener("input", renderMeals);
 
 function renderMeals() {
   const box = document.getElementById("meal-groups"); box.innerHTML = "";
   document.getElementById("meal-count").textContent = `${active().length} of ${data.meals.length} on the wheel`;
   const q = document.getElementById("search").value.trim().toLowerCase();
-  const hit = m => !q || m.name.toLowerCase().includes(q) || m.detail.toLowerCase().includes(q);
+  const hit = m => !q || m.name.toLowerCase().includes(q);
   if (q && !data.meals.some(hit)) {
     const p = document.createElement("p"); p.className = "note"; p.textContent = "No meals match your search."; box.appendChild(p);
     return;
@@ -505,11 +516,10 @@ function renderMeals() {
         li.innerHTML = `
           <div class="meal-head">
             <input type="checkbox" id="on-${m.id}" ${m.on ? "checked" : ""} aria-label="Include ${esc(m.name)} on the wheel">
-            <div class="meal-text"><div class="meal-name ${m.on ? "" : "off"}"></div>${m.detail ? `<div class="meal-detail"></div>` : ""}</div>
+            <div class="meal-text"><div class="meal-name ${m.on ? "" : "off"}"></div></div>
             <button class="btn ghost small" data-act="edit">Edit</button>
           </div>`;
         li.querySelector(".meal-name").textContent = m.name;
-        if (m.detail) li.querySelector(".meal-detail").textContent = m.detail;
         li.querySelector("input").addEventListener("change", e => { m.on = e.target.checked; save(); refresh(); });
         li.querySelector('[data-act="edit"]').onclick = () => { editing = m.id; confirmMeal = null; renderMeals(); document.getElementById("en-" + m.id)?.focus(); };
       }
@@ -525,7 +535,7 @@ document.getElementById("add-meal").addEventListener("submit", e => {
   const detail = document.getElementById("am-detail").value.trim();
   const cat = document.getElementById("am-cat").value || data.cats[0].id;
   data.meals.push({ id: uid("m"), name, detail, cat, on: true });
-  e.target.reset(); setPanel(null); document.getElementById("search").value = "";
+  e.target.reset(); setPanel(false); document.getElementById("search").value = "";
   renderAddCat(); save(); refresh(); toast(`Added ${name}`);
 });
 
@@ -552,12 +562,13 @@ function renderReset() {
 /* ---------- Routing & refresh ---------- */
 function refresh() { renderChips(); renderCats(); renderAddCat(); renderMeals(); renderReset(); draw(); idleResult(); }
 function route() {
-  const manage = location.hash === "#manage";
-  if (manage && spinning) return;
-  document.getElementById("v-wheel").hidden = manage;
+  const manage = location.hash === "#manage", cats = location.hash === "#categories";
+  if ((manage || cats) && spinning) return;
+  document.getElementById("v-wheel").hidden = manage || cats;
   document.getElementById("v-manage").hidden = !manage;
+  document.getElementById("v-cats").hidden = !cats;
   window.scrollTo(0, 0);
-  if (!manage) draw();
+  if (!manage && !cats) draw();
 }
 window.addEventListener("hashchange", route);
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
